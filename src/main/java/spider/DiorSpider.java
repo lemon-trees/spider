@@ -79,7 +79,7 @@ public class DiorSpider {
         if (CollectionUtil.isNotEmpty(products)) {
             String[] title = {"物品名称", "型号", "规格", "官网价格", "图片1", "图片2", "图片3", "图片4", "图片5", "图片6", "颜色", "材质", "描述",
                     "商品链接"};
-            getHSSFWorkbook("商品信息", title, products);
+            getHSSFWorkbook("Dior商品信息", title, products);
         }
 
     }
@@ -305,9 +305,9 @@ public class DiorSpider {
                         String imageName = getImageName();
 //                        downloadImage(imageUrl, imageName);
                         executorService.submit(() -> {
-                            downloadCompressedImage(imageUrl, imageName);
+                            downloadImage(imageUrl, imageName);
                         });
-                        images.add(imageName + ".webp");
+                        images.add(imageName + ".PNG");
                     }
                     product.setImages(images);
                 }
@@ -421,7 +421,7 @@ public class DiorSpider {
             row.createCell(12).setCellValue(values.get(i).getDesc());
 
             HSSFCell cell1 = row.createCell(13);
-            cell1.setCellValue("DIOR迪奥官网");
+            cell1.setCellValue("DIOR 迪奥官网");
             Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.URL);
             hyperlink.setAddress(values.get(i).getDetailUrl());
             cell1.setHyperlink(hyperlink);

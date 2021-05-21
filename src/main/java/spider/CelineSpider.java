@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollectionUtil;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -43,15 +44,17 @@ public class CelineSpider {
 
     static int imageNum = 1;
 
-    static String prefix = "I";
+    static String prefix = "D";
 
     static String zero = "0000000";
 
-    static String women_url = "https://www.prada.com/cn/zh/women/bags.html?page=";
+    static String file_path = "c://Users/tt/Desktop/VALUE_005";
 
-    static String men_url = "https://www.prada.com/cn/zh/men/bags.html?page=";
+    static String image_folder = "VALUE_SIA";
 
-    static ExecutorService executorService = Executors.newFixedThreadPool(10);
+    static String image_tyep = ".PNG";
+
+    static ExecutorService executorService = Executors.newFixedThreadPool(20);
 
 
     static {
@@ -63,20 +66,32 @@ public class CelineSpider {
 
     public static void main(String[] args) throws Exception {
 
-        String[] womenHandBagCategorys = {"新品","TRIOMPHE帆布","Triomphe 刺绣织物","TRIOMPHE","BELT BAG","CLASSIC","LUGGAGE", "16", "SANGLE","CABAS手袋"};
-        String[] womenWalletCategorys = {"新品","ESSENTIALS","皮具配饰","TRIOMPHE帆布"};
-
-
-        String[] menCategorys = {"新品","邮差包","单肩背包","CABAS手袋","商务与旅行手袋","背包"};
-        String[] menWalletCategorys = {"新品","钱包","卡包","电子产品配饰","商务与旅行手袋","背包"};
-
         List<Product> products = new ArrayList<>();
-        for (int i = 1; i < 2; i++) {
-            downPradaProduct(women_url, i, products);
+
+        String[] womenHandBagCategorys = {"新品", "triomphe帆布", "triomphe-刺绣织物", "triomphe", "belt-bag", "classic", "luggage", "16", "sangle", "cabas手袋"};
+        String url = "https://www.celine.com/zhs-cn/celine%E5%A5%B3%E5%A3%AB/%E6%89%8B%E8%A2%8B/";
+        for (String womenHandBagCategory : womenHandBagCategorys) {
+            downProduct(url + womenHandBagCategory + "/", products);
         }
-//        for (int i = 1; i < 10; i++) {
-//            downPradaProduct(men_url, i, products);
-//        }
+        String[] womenWalletCategorys = {"新品", "essentials", "皮具配饰", "triomphe帆布"};
+        url = "https://www.celine.com/zhs-cn/celine%E5%A5%B3%E5%A3%AB/%E5%B0%8F%E7%9A%AE%E5%85%B7";
+        for (String womenWalletCategory : womenWalletCategorys) {
+            downProduct(url + womenWalletCategory + "/", products);
+        }
+
+
+        String[] menCategorys = {"新品", "邮差包", "单肩背包", "cabas手袋", "商务与旅行手袋", "背包"};
+        url = "https://www.celine.com/zhs-cn/celine%E7%94%B7%E5%A3%AB/%E6%89%8B%E8%A2%8B/";
+        for (String menCategory : menCategorys) {
+            downProduct(url + menCategory + "/", products);
+        }
+
+        String[] menWalletCategorys = {"新品", "钱包", "卡包", "电子产品配饰", "商务与旅行手袋", "背包"};
+        url = "https://www.celine.com/zhs-cn/celine%E7%94%B7%E5%A3%AB/%E5%B0%8F%E7%9A%AE%E5%85%B7/";
+        for (String menWalletCategory : menWalletCategorys) {
+            downProduct(url + menWalletCategory + "/", products);
+        }
+
         executorService.shutdown();
         while (true) {
             if (executorService.isTerminated()) {
@@ -92,10 +107,7 @@ public class CelineSpider {
         }
     }
 
-
-    public static void downPradaProduct(String url, int page, List<Product> products) throws Exception {
-        // 需要爬取商品信息的网站地址
-        url = url + page;
+    public static void downProduct(String url, List<Product> products) throws Exception {
         // 动态模拟请求数据
         httpGet.setURI(new URI(url));
         // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
@@ -107,22 +119,30 @@ public class CelineSpider {
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = null;
-                doc = Jsoup.parse(html);
-                Elements ulList = doc.select("div[class='gridCategory__wrapper js-plp-items-wrapper']");
-                Elements liList = ulList.select("product-qb-component");
+                Document doc = Jsoup.parse(html);
+                Elements ulList = doc.select("ul[class='o-listing-grid']");
+                Elements liList = ulList.select("li");
                 for (Element item : liList) {
                     Product product = new Product();
-                    String productNo = item.attr("data-part-number");
+
+                    String productNo = item.select("div[class='m-product-listing']").attr("data-id");
                     product.setProductNo(productNo);
-                    String price = item.attr("data-price").replace("￥", "").replace(",", "");
+
+                    Elements productEle = item.select("div[class='m-product-listing']").select("a");
+                    String productName = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
+                            "[class" +
+                            "='m-product-listing__meta']").select("div[class='m-product-listing__meta-title f-body']").text();
+                    product.setName(productName);
+                    String price = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
+                            "[class" +
+                            "='m-product-listing__meta']").select("p[class='m-product-listing__meta-price f-body']").text().replace("CNY", "");
                     product.setPrice(price);
-                    String color = item.attr("data-color");
+                    String color = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
+                            "[class" +
+                            "='m-product-listing__meta']").select("div[class='m-product-listing__meta-title f-body']").select("span[class='a11y']").text().replace(";", "");
                     product.setColor(color);
-                    System.out.println(productNo + ":" + price + ":" + color);
-                    String detailUrl = "https://www.prada.com" + item.select("div[class='gridCategory__item " +
-                            "js-product-qb enableFadeIn']").select(
-                            "div[class='productQB']").select("div[class='productQB__wrapperOut']").select("a").attr("href");
+
+                    String detailUrl = "https://www.celine.com" + productEle.attr("href");
                     product.setDetailUrl(detailUrl);
                     downPradaProductDetail(detailUrl, product);
                     products.add(product);
@@ -150,48 +170,40 @@ public class CelineSpider {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
                 Document doc = null;
                 doc = Jsoup.parse(html);
-                Elements ulList = doc.select("section[class='pDetails']");
-                Elements productName = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapper']").select("div[class" +
-                        "='pDetails__info js-info']").select("h1[class='pDetails__title']");
-                String name = productName.text();
-                product.setName(name);
-                if (null != name && name.contains("皮革")) {
-                    product.setMaterial("皮革");
+                Elements ulList = doc.select("div[class='o-product__product']");
+                String desc = ulList.select("div[class='o-product__meta']").select("form[class='o-form" +
+                        "']").select("div[class='o-product__description o-body-copy']").select("div[class='a-text " +
+                        "f-body']").select("p").html();
+
+                if (null != desc) {
+                    if (desc.contains("<br>")) {
+                        String[] info = desc.split("<br>");
+                        String specs = info[0];
+                        if (specs.contains("(") && specs.contains(")")) {
+                            specs = specs.substring(specs.indexOf("("), specs.indexOf(")"));
+                        }
+                        product.setSpecs(specs);
+                        String material = info[1];
+                        product.setMaterial(material);
+                    }
+                    product.setDesc(desc.replace("<br>", ","));
                 }
-                if (null != name && name.contains("尼龙")) {
-                    product.setMaterial("尼龙");
-                }
-                if (null != name && name.contains("尼龙") && name.contains("皮革")) {
-                    product.setMaterial("尼龙/皮革");
-                }
-                //获取商品描述
-                Element liList = ulList.select("section[class='pDetails__details tab js-details']")
-                        .select("div[class='tab__body']")
-                        .select("article[class='tab__item js-tab']")
-                        .select("div[class='tab__itemCont tabCont']")
-                        .select("div[class='tabCont__par']").get(0);
-                //描述
-                String desc = liList.select("p").text() + liList.select("li").text();
-                product.setDesc(desc);
-                //规格
-                String specs = liList.ownText();
-                if (null != specs) {
-                    specs = specs.replace("厘米", "").replace("高度", "×").replace("长度", "×").replace("宽度", "cm");
-                }
-                product.setSpecs(specs);
+
+
                 //获取图片
-                Elements picele = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapperImg" +
-                        "']").select("div[class" +
-                        "='pDetails__imgWrapper js-imgWrapper']").select("div[class='pDetails__sliderCont']").select("div[class='pDetails__slider js-slider js-scrollImage']").select("div[class='pDetails__slide js-imgProduct slick-slide']");
+                Elements picele = ulList.select("div[class='o-product__imgs']").select("ul[class='m-thumb-carousel " +
+                        "m-thumb-carousel--prime m-thumb-carousel--square" +
+                        "']").select("li");
                 List<String> images = new ArrayList<>();
                 for (Element item : picele) {
-                    String imageUrl = item.select("a").select("picture-component").select("picture").select("img").attr(
-                            ":data-src").replace("'", "");
+                    String imageUrl =
+                            item.select("button[class='m-thumb-carousel__img']").select("img").attr(
+                                    "data-src-zoom");
                     String imageName = getImageName();
                     executorService.submit(() -> {
                         downloadCompressedImage(imageUrl, imageName);
                     });
-                    images.add(imageName + ".webp");
+                    images.add(imageName + ".PNG");
                 }
                 product.setImages(images);
                 // 消耗掉实体
@@ -207,21 +219,42 @@ public class CelineSpider {
 
     private static String downloadImage(String fileUrl, String fileName) {
         try {
-            URL url = new URL(fileUrl);
-            String tempFileName = "c://Users/tt/Desktop/VALUE_010/VALUE_XIA/" + fileName + ".webp";
+//            URL url = new URL(fileUrl);
+////            String tempFileName = "c://Users/tt/Desktop/VALUE_010/VALUE_XIA/" + fileName + ".webp";
+//            String tempFileName = file_path + image_folder + fileName + ".webp";
+//            File temp = new File(tempFileName);
+//            FileUtils.copyURLToFile(url, temp);
+//            return fileName + ".webp";
+
+            HttpGet httpGet = new HttpGet();
+            RequestConfig requestConfig =
+                    RequestConfig.custom().setConnectTimeout(20000).setConnectionRequestTimeout(20000).setSocketTimeout(20000).build();
+            // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
+            httpGet.setHeader("User-Agent", "Mozilla/5.0");
+            httpGet.addHeader("accept", "*/*");
+            httpGet.setConfig(requestConfig);
+            httpGet.setURI(new URI(fileUrl));
+            CloseableHttpResponse resp = httpclient.execute(httpGet);// 调用服务器接口
+            String tempFileName = file_path + "/" + image_folder + "/" + fileName + ".jpg";
             File temp = new File(tempFileName);
-            FileUtils.copyURLToFile(url, temp);
-            return fileName + ".webp";
+            FileUtils.copyInputStreamToFile(resp.getEntity().getContent(), temp);
+            return fileName + ".jpg";
         } catch (Exception e) {
             return null;
         }
     }
 
-
+    /**
+     * https://blog.csdn.net/monitor1394/article/details/6087583
+     *
+     * @param fileUrl
+     * @param fileName
+     * @return
+     */
     public static String downloadCompressedImage(String fileUrl, String fileName) {
         URL url = null;
         try {
-            String tempFileName = "c://Users/tt/Desktop/VALUE_010/VALUE_XIA/" + fileName + ".JPEG";
+            String tempFileName = file_path + "/" + image_folder + "/" + fileName + ".PNG";
             url = new URL(fileUrl);
             //1.获取url的输入流 dataInputStream
             DataInputStream dataInputStream = new DataInputStream(url.openStream());
@@ -232,21 +265,33 @@ public class CelineSpider {
             //4.获得原始图片的长宽 width/height
             int width = preImage.getWidth();
             int height = preImage.getHeight();
+
+            int widthNew = width / 6;
+            int heightNew = height / 6;
+
             //5.构造压缩后的图片流 image 长宽各为原来的几分之几
-            BufferedImage image = new BufferedImage(width / 6, height / 6, BufferedImage.TYPE_INT_RGB);
+            BufferedImage image = new BufferedImage(widthNew, heightNew, BufferedImage.TYPE_INT_ARGB);
             //6.给image创建Graphic ,在Graphic上绘制压缩后的图片
-            Graphics graphic = image.createGraphics();
-            graphic.drawImage(preImage, 0, 0, width / 6, height / 6, null);
+            Graphics2D g2d = image.createGraphics();
+            image = g2d.getDeviceConfiguration().createCompatibleImage(widthNew, heightNew, Transparency.TRANSLUCENT);
+            g2d.dispose();
+            g2d = image.createGraphics();
+
+            Image from = preImage.getScaledInstance(widthNew, heightNew, preImage.SCALE_AREA_AVERAGING);
+            g2d.drawImage(from, 0, 0, null);
+            g2d.dispose();
+
+
             //7.为file生成对应的文件输出流
             //将image传给输出流
             FileOutputStream fileOutputStream = new FileOutputStream(tempFileName);
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(fileOutputStream);
             //8.将image写入到file中
-            ImageIO.write(image, "JPEG", bufferedOutputStream);
+            ImageIO.write(image, "PNG", bufferedOutputStream);
             //9.关闭输入输出流
             bufferedInputStream.close();
             bufferedOutputStream.close();
-            return fileName + ".JPEG";
+            return fileName + ".PNG";
         } catch (IOException e) {
             return null;
         }
@@ -284,105 +329,25 @@ public class CelineSpider {
             if (CollectionUtil.isNotEmpty(images)) {
                 for (int i1 = 0; i1 < images.size(); i1++) {
                     HSSFCell cell1 = row.createCell(i1 + 4);
-                    cell1.setCellValue("VALUE_XIA\\" + images.get(i1));
+                    cell1.setCellValue(image_folder + "\\" + images.get(i1));
                     Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.FILE);
-                    hyperlink.setAddress("VALUE_XIA\\" + images.get(i1));
+                    hyperlink.setAddress(image_folder + "\\" + images.get(i1));
                     cell1.setHyperlink(hyperlink);
                 }
             }
             row.createCell(10).setCellValue(values.get(i).getColor());
             row.createCell(11).setCellValue(values.get(i).getMaterial());
             row.createCell(12).setCellValue(values.get(i).getDesc());
-            row.createCell(13).setCellValue(values.get(i).getDetailUrl());
+
+
+            HSSFCell cell1 = row.createCell(13);
+            cell1.setCellValue("SELINE 思琳官网");
+            Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.URL);
+            hyperlink.setAddress(values.get(i).getDetailUrl());
+            cell1.setHyperlink(hyperlink);
 
         }
-        wb.write(new FileOutputStream("c://Users/tt/Desktop/VALUE_010/商品信息.xls"));
-    }
-
-
-    static class Product {
-
-        private String name;
-        private String price;
-        private String color;
-        private String specs;
-        private String productNo;
-        private String material;
-        private String desc;
-        private String detailUrl;
-        private List<String> images;
-
-        public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public String getPrice() {
-            return price;
-        }
-
-        public void setPrice(String price) {
-            this.price = price;
-        }
-
-        public String getColor() {
-            return color;
-        }
-
-        public void setColor(String color) {
-            this.color = color;
-        }
-
-        public String getSpecs() {
-            return specs;
-        }
-
-        public void setSpecs(String specs) {
-            this.specs = specs;
-        }
-
-        public String getProductNo() {
-            return productNo;
-        }
-
-        public void setProductNo(String productNo) {
-            this.productNo = productNo;
-        }
-
-        public String getMaterial() {
-            return material;
-        }
-
-        public void setMaterial(String material) {
-            this.material = material;
-        }
-
-        public String getDesc() {
-            return desc;
-        }
-
-        public void setDesc(String desc) {
-            this.desc = desc;
-        }
-
-        public List<String> getImages() {
-            return images;
-        }
-
-        public void setImages(List<String> images) {
-            this.images = images;
-        }
-
-        public String getDetailUrl() {
-            return detailUrl;
-        }
-
-        public void setDetailUrl(String detailUrl) {
-            this.detailUrl = detailUrl;
-        }
+        wb.write(new FileOutputStream(file_path + "/商品信息.xls"));
     }
 
     private static String getImageName() {

@@ -37,7 +37,7 @@ import java.util.concurrent.Executors;
  * <artifactId>jsoup</artifactId>
  * </dependency>
  */
-public class Spider {
+public class BubberySpider {
 
     static CloseableHttpClient httpclient;
     static HttpGet httpGet;
@@ -334,7 +334,7 @@ public class Spider {
             cell1.setHyperlink(hyperlink);
 
         }
-        wb.write(new FileOutputStream(file_path+"/商品信息.xls"));
+        wb.write(new FileOutputStream("c://Users/tt/Desktop/VALUE_010/商品信息.xls"));
     }
 
 
