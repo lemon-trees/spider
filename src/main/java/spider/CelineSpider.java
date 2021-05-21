@@ -180,7 +180,7 @@ public class CelineSpider {
                         String[] info = desc.split("<br>");
                         String specs = info[0];
                         if (specs.contains("(") && specs.contains(")")) {
-                            specs = specs.substring(specs.indexOf("("), specs.indexOf(")"));
+                            specs = specs.substring(specs.indexOf("(") + 1, specs.indexOf(")"));
                         }
                         product.setSpecs(specs);
                         String material = info[1];
