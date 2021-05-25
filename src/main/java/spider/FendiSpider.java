@@ -1,6 +1,9 @@
 package spider;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
@@ -15,10 +18,6 @@ import org.apache.poi.hssf.usermodel.*;
 import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Hyperlink;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -37,7 +36,7 @@ import java.util.concurrent.Executors;
  * <artifactId>jsoup</artifactId>
  * </dependency>
  */
-public class CelineSpider {
+public class FendiSpider {
 
     static CloseableHttpClient httpclient;
     static HttpGet httpGet;
@@ -48,7 +47,7 @@ public class CelineSpider {
 
     static String zero = "0000000";
 
-    static String file_path = "c://Users/tt/Desktop/VALUE_005";
+    static String file_path = "c://Users/tt/Desktop/VALUE_006";
 
     static String image_folder = "VALUE_SIA";
 
@@ -68,30 +67,10 @@ public class CelineSpider {
 
         List<Product> products = new ArrayList<>();
 
-        String[] womenHandBagCategorys = {"新品", "triomphe帆布", "triomphe-刺绣织物", "triomphe", "belt-bag", "classic",
-                "luggage", "16", "sangle", "cabas手袋","更多款式"};
-        String url = "https://www.celine.com/zhs-cn/celine%E5%A5%B3%E5%A3%AB/%E6%89%8B%E8%A2%8B/";
-        for (String womenHandBagCategory : womenHandBagCategorys) {
-            downProduct(url + womenHandBagCategory + "/", products);
-        }
-        String[] womenWalletCategorys = {"新品", "essentials", "皮具配饰", "triomphe帆布","更多款式"};
-        url = "https://www.celine.com/zhs-cn/celine%E5%A5%B3%E5%A3%AB/%E5%B0%8F%E7%9A%AE%E5%85%B7";
-        for (String womenWalletCategory : womenWalletCategorys) {
-            downProduct(url + womenWalletCategory + "/", products);
-        }
-
-
-        String[] menCategorys = {"新品", "邮差包", "单肩背包", "cabas手袋", "商务与旅行手袋", "背包"};
-        url = "https://www.celine.com/zhs-cn/celine%E7%94%B7%E5%A3%AB/%E6%89%8B%E8%A2%8B/";
-        for (String menCategory : menCategorys) {
-            downProduct(url + menCategory + "/", products);
-        }
-
-        String[] menWalletCategorys = {"新品", "钱包", "卡包", "电子产品配饰","背包","其他"};
-        url = "https://www.celine.com/zhs-cn/celine%E7%94%B7%E5%A3%AB/%E5%B0%8F%E7%9A%AE%E5%85%B7/";
-        for (String menWalletCategory : menWalletCategorys) {
-            downProduct(url + menWalletCategory + "/", products);
-        }
+        downProduct("c://Users/tt/Desktop/爬虫/fendi/女士皮夹.json", products);
+        downProduct("c://Users/tt/Desktop/爬虫/fendi/女士手袋.json", products);
+        downProduct("c://Users/tt/Desktop/爬虫/fendi/男士皮夹.json", products);
+        downProduct("c://Users/tt/Desktop/爬虫/fendi/男士手袋.json", products);
 
         executorService.shutdown();
         while (true) {
@@ -108,111 +87,105 @@ public class CelineSpider {
         }
     }
 
-    public static void downProduct(String url, List<Product> products) throws Exception {
-        // 动态模拟请求数据
-        httpGet.setURI(new URI(url));
-        // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
-        httpGet.setHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36");
-        CloseableHttpResponse response = httpclient.execute(httpGet);
-        // 获取响应状态码
-        int statusCode = response.getStatusLine().getStatusCode();
+    public static String readJsonFile(String fileName) {
+        String jsonStr = "";
         try {
-            HttpEntity entity = response.getEntity();
-            if (statusCode == 200) {
-                String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = Jsoup.parse(html);
-                Elements ulList = doc.select("ul[class='o-listing-grid']");
-                Elements liList = ulList.select("li");
-                for (Element item : liList) {
-                    Product product = new Product();
-
-                    String productNo = item.select("div[class='m-product-listing']").attr("data-id");
-                    product.setProductNo(productNo);
-
-                    Elements productEle = item.select("div[class='m-product-listing']").select("a");
-                    String productName = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
-                            "[class" +
-                            "='m-product-listing__meta']").select("div[class='m-product-listing__meta-title f-body']").text();
-                    product.setName(productName);
-                    String price = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
-                            "[class" +
-                            "='m-product-listing__meta']").select("p[class='m-product-listing__meta-price f-body']").text().replace("CNY", "");
-                    product.setPrice(price);
-                    String color = productEle.select("div[class='m-product-listing__wrapper']").select("div" +
-                            "[class" +
-                            "='m-product-listing__meta']").select("div[class='m-product-listing__meta-title f-body']").select("span[class='a11y']").text().replace(";", "");
-                    product.setColor(color);
-
-                    String detailUrl = "https://www.celine.com" + productEle.attr("href");
-                    product.setDetailUrl(detailUrl);
-                    downPradaProductDetail(detailUrl, product);
-                    products.add(product);
-                }
-                // 消耗掉实体
-                EntityUtils.consume(response.getEntity());
-            } else {
-                // 消耗掉实体
-                EntityUtils.consume(response.getEntity());
+            File jsonFile = new File(fileName);
+            FileReader fileReader = new FileReader(jsonFile);
+            Reader reader = new InputStreamReader(new FileInputStream(jsonFile), "utf-8");
+            int ch = 0;
+            StringBuffer sb = new StringBuffer();
+            while ((ch = reader.read()) != -1) {
+                sb.append((char) ch);
             }
-        } finally {
-            response.close();
+            fileReader.close();
+            reader.close();
+            jsonStr = sb.toString();
+            return jsonStr;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
         }
+    }
+
+    public static void downProduct(String url, List<Product> products) throws Exception {
+        String test = readJsonFile(url);
+        JSONObject jobj = JSON.parseObject(test);
+        JSONArray jsonArray = jobj.getJSONObject("data").getJSONArray("items");
+        for (Object o : jsonArray) {
+            Product product = new Product();
+            JSONObject ob = (JSONObject) o;
+            product.setName(ob.getString("name") + ob.getString("shortDesc"));
+            product.setDesc(ob.getString("description"));
+            product.setPrice(ob.getString("price").replace("￥", "").replace(",", ""));
+            product.setProductNo(ob.getString("sku"));
+            String detailUrl = "https://www.fendi.cn/rest/default/V1/applet/product/" +
+                    ob.getString("sku") +
+                    "?version=7765a92ee7e1b31628f9917d9a6aacac";
+            product.setDetailUrl(detailUrl);
+            JSONObject chiil = (JSONObject) ob.getJSONArray("childProducts").get(0);
+            product.setColor(chiil.getString("colorCn"));
+
+            downPradaProductDetail(detailUrl, product);
+
+            products.add(product);
+        }
+
+
     }
 
 
     public static void downPradaProductDetail(String url, Product product) throws Exception {
         httpGet.setURI(new URI(url));
         CloseableHttpResponse response = httpclient.execute(httpGet);
-        // 获取响应状态码
-        int statusCode = response.getStatusLine().getStatusCode();
         try {
+            // 获取响应状态码
+            int statusCode = response.getStatusLine().getStatusCode();
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
-                String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = null;
-                doc = Jsoup.parse(html);
-                Elements ulList = doc.select("div[class='o-product__product']");
-                String desc = ulList.select("div[class='o-product__meta']").select("form[class='o-form" +
-                        "']").select("div[class='o-product__description o-body-copy']").select("div[class='a-text " +
-                        "f-body']").select("p").html();
+                String json = EntityUtils.toString(entity, Consts.UTF_8);
+                JSONObject jobj = JSON.parseObject(json).getJSONObject("data");
+                JSONArray attr = jobj.getJSONArray("childProducts");
 
-                if (null != desc) {
-                    if (desc.contains("<br>")) {
-                        String[] info = desc.split("<br>");
-                        String specs = info[0];
-                        if (specs.contains("(") && specs.contains(")")) {
-                            specs = specs.substring(specs.indexOf("(") + 1, specs.indexOf(")"));
+                if (null != attr) {
+                    JSONObject info = ((JSONObject) attr.get(0)).getJSONObject("specificMorer");
+                    String material = info.getString("composition");
+                    product.setMaterial(material);
+
+                    String spec = "" + info.getString("height") + "x" + info.getString("depth") + "x" + info.getString("length");
+                    product.setSpecs(spec);
+                }
+
+
+                JSONArray imagesArray = jobj.getJSONArray("images");
+                if (null != imagesArray) {
+                    List<String> images = new ArrayList<>();
+                    List<String> imagesUrl = new ArrayList<>();
+                    for (Object o : imagesArray) {
+                        JSONObject image = (JSONObject) o;
+                        imagesUrl.add(image.getString("url"));
+                        imagesUrl.add(image.getString("tiny_url"));
+                        if (imagesUrl.size() > 6) {
+                            break;
                         }
-                        product.setSpecs(specs);
-                        String material = info[1];
-                        product.setMaterial(material);
                     }
-                    product.setDesc(desc.replace("<br>", ","));
+                    for (String item : imagesUrl) {
+                        String imageName = getImageName();
+                        executorService.submit(() -> {
+                            downloadCompressedImage(item, imageName);
+                        });
+                        images.add(imageName + ".PNG");
+                    }
+                    product.setImages(images);
                 }
-
-
-                //获取图片
-                Elements picele = ulList.select("div[class='o-product__imgs']").select("ul[class='m-thumb-carousel " +
-                        "m-thumb-carousel--prime m-thumb-carousel--square" +
-                        "']").select("li");
-                List<String> images = new ArrayList<>();
-                for (Element item : picele) {
-                    String imageUrl =
-                            item.select("button[class='m-thumb-carousel__img']").select("img").attr(
-                                    "data-src-zoom");
-                    String imageName = getImageName();
-                    executorService.submit(() -> {
-                        downloadCompressedImage(imageUrl, imageName);
-                    });
-                    images.add(imageName + ".PNG");
-                }
-                product.setImages(images);
-                // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             } else {
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             }
+        } catch (Exception e) {
+            System.out.println("获取商品详情失败" + e.getMessage());
+
         } finally {
             response.close();
         }
@@ -342,7 +315,7 @@ public class CelineSpider {
 
 
             HSSFCell cell1 = row.createCell(13);
-            cell1.setCellValue("SELINE 思琳官网");
+            cell1.setCellValue("FENDI 芬迪官网");
             Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.URL);
             hyperlink.setAddress(values.get(i).getDetailUrl());
             cell1.setHyperlink(hyperlink);
