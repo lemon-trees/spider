@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.config.RequestConfig;
@@ -43,17 +44,17 @@ public class FendiSpider {
 
     static int imageNum = 1;
 
-    static String prefix = "D";
+    static String prefix = "J";
 
     static String zero = "0000000";
 
-    static String file_path = "c://Users/tt/Desktop/VALUE_006";
+    static String file_path = "c://Users/tt/Desktop/VALUE_011";
 
-    static String image_folder = "VALUE_SIA";
+    static String image_folder = "VALUE_YIA";
 
     static String image_tyep = ".PNG";
 
-    static ExecutorService executorService = Executors.newFixedThreadPool(20);
+    static ExecutorService executorService = Executors.newFixedThreadPool(30);
 
 
     static {
@@ -122,7 +123,7 @@ public class FendiSpider {
             String detailUrl = "https://www.fendi.cn/rest/default/V1/applet/product/" +
                     ob.getString("sku") +
                     "?version=7765a92ee7e1b31628f9917d9a6aacac";
-            product.setDetailUrl(detailUrl);
+            product.setDetailUrl(ob.getString("url"));
             JSONObject chiil = (JSONObject) ob.getJSONArray("childProducts").get(0);
             product.setColor(chiil.getString("colorCn"));
 
@@ -152,8 +153,34 @@ public class FendiSpider {
                     String material = info.getString("composition");
                     product.setMaterial(material);
 
-                    String spec = "" + info.getString("height") + "x" + info.getString("depth") + "x" + info.getString("length");
-                    product.setSpecs(spec);
+
+                    String spec = "";
+                    String height = info.getString("height");
+                    if (StringUtils.isNotBlank(height)) {
+                        if (height.contains(",") && height.lastIndexOf(",") == height.length() - 1) {
+                            height = height.substring(0, height.lastIndexOf(","));
+                        }
+                        spec += height + "x";
+                    }
+                    String depth = info.getString("depth");
+                    if (StringUtils.isNotBlank(depth)) {
+                        if (depth.contains(",") && depth.lastIndexOf(",") == depth.length() - 1) {
+                            depth = depth.substring(0, depth.lastIndexOf(","));
+                        }
+                        spec += depth + "x";
+                    }
+                    String length = info.getString("length");
+                    if (StringUtils.isNotBlank(length)) {
+                        if (length.contains(",") && length.lastIndexOf(",") == length.length() - 1) {
+                            length = length.substring(0, length.lastIndexOf(","));
+                        }
+                        spec += length + "x";
+                    }
+                    if (StringUtils.isNotBlank(spec) && spec.contains("x")) {
+                        spec = spec.substring(0, spec.lastIndexOf("x")).replace("Cm","");
+                        product.setSpecs(spec + "cm");
+                    }
+
                 }
 
 
@@ -240,8 +267,8 @@ public class FendiSpider {
             int width = preImage.getWidth();
             int height = preImage.getHeight();
 
-            int widthNew = width / 6;
-            int heightNew = height / 6;
+            int widthNew = width / 2;
+            int heightNew = height / 2;
 
             //5.构造压缩后的图片流 image 长宽各为原来的几分之几
             BufferedImage image = new BufferedImage(widthNew, heightNew, BufferedImage.TYPE_INT_ARGB);
