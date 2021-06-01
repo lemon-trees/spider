@@ -27,6 +27,7 @@ import java.io.*;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -45,15 +46,19 @@ public class LvSpider {
 
     static int imageNum = 1;
 
-    static String prefix = "I";
+    static String prefix = "C";
 
     static String zero = "0000000";
 
-    static String file_path = "c://Users/tt/Desktop/VALUE_010";
+    static String file_path = "c://Users/tt/Desktop/VALUE_004";
 
-    static String image_folder = "VALUE_XIA";
+    static String image_folder = "VALUE_RIA";
 
     static String image_tyep = ".PNG";
+
+    static String women_all_bag_url = "https://www.louisvuitton.cn/zhs-cn/women/handbags/all-handbags/_/N-1ouyuai" +
+            "?page=";
+    static String men_all_bag_url = "https://www.louisvuitton.cn/zhs-cn/men/bags/all-bags/_/N-nstx58?page=";
 
     static ExecutorService executorService = Executors.newFixedThreadPool(30);
 
@@ -61,12 +66,23 @@ public class LvSpider {
     static {
         httpclient = HttpClients.createDefault();
         httpGet = new HttpGet();
+        RequestConfig requestConfig =
+                RequestConfig.custom().setConnectTimeout(20000).setConnectionRequestTimeout(20000).setSocketTimeout(20000).build();
         // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
-        httpGet.setHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36");
+        httpGet.setHeader("User-Agent", "Mozilla/5.0");
+        httpGet.addHeader("accept", "*/*");
+        httpGet.setConfig(requestConfig);
     }
 
     public static void main(String[] args) throws Exception {
-        List<Product> products = new ArrayList<>();
+        Map<String, Product> products = new HashMap<>();
+        for (int i = 1; i < 2; i++) {
+            downProduct(women_all_bag_url, i, products);
+        }
+//        for (int i = 1; i < 20; i++) {
+//            downProduct(men_all_bag_url, i, products);
+//        }
+
         executorService.shutdown();
         while (true) {
             if (executorService.isTerminated()) {
@@ -75,10 +91,10 @@ public class LvSpider {
             }
             Thread.sleep(200);
         }
-        if (CollectionUtil.isNotEmpty(products)) {
+        if (CollectionUtil.isNotEmpty(products.values())) {
             String[] title = {"物品名称", "型号", "规格", "官网价格", "图片1", "图片2", "图片3", "图片4", "图片5", "图片6", "颜色", "材质", "描述",
                     "商品链接"};
-            getHSSFWorkbook("prada商品信息", title, products);
+            getHSSFWorkbook("prada商品信息", title, new ArrayList<>(products.values()));
         }
     }
 
@@ -89,7 +105,7 @@ public class LvSpider {
         // 动态模拟请求数据
         httpGet.setURI(new URI(url));
         // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
-        httpGet.setHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36");
+        httpGet.setHeader("user-agent", "Mozilla/5.0");
         CloseableHttpResponse response = httpclient.execute(httpGet);
         // 获取响应状态码
         int statusCode = response.getStatusLine().getStatusCode();
@@ -98,23 +114,30 @@ public class LvSpider {
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
                 Document doc = Jsoup.parse(html);
-                Elements ulList = doc.select("div[class='gridCategory__wrapper js-plp-items-wrapper']");
-                Elements liList = ulList.select("product-qb-component");
-                for (Element item : liList) {
+                Elements div = doc.select("div[class='lv-paginated-list lv-category__grid']");
+                Elements liList = div.select("div[class='lv-paginated-list lv-category__grid']").select("ul[class='lv" +
+                        "-list']").select("li");
+                if (CollectionUtil.isEmpty(liList)) {
+                    return;
+                }
+                for (int i = 0; i < liList.size(); i++) {
+                    Element item = liList.get(i);
+                    Elements info  = item.select("div[class='lv-product-card -compact-large']").select("div" +
+                            "[class='lv-product-card__wrap']")
+                            .select("div[class='lv-product-card__info-wrapper']").select("div[class='lv-product" +
+                                    "-card__info']").select("span");
                     Product product = new Product();
-                    String productNo = item.attr("data-part-number");
+                    String productNo = item.attr("id");
                     product.setProductNo(productNo);
                     String price = item.attr("data-price").replace("￥", "").replace(",", "");
                     product.setPrice(price);
                     String color = item.attr("data-color");
                     product.setColor(color);
                     System.out.println(productNo + ":" + price + ":" + color);
-                    String detailUrl = "https://www.prada.com" + item.select("div[class='gridCategory__item " +
-                            "js-product-qb enableFadeIn']").select(
-                            "div[class='productQB']").select("div[class='productQB__wrapperOut']").select("a").attr("href");
+                    String detailUrl = "";
                     product.setDetailUrl(detailUrl);
                     products.put(productNo, product);
-                    downPradaProductDetail(detailUrl, product);
+//                    downProductDetail(detailUrl, product);
                 }
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
@@ -128,7 +151,7 @@ public class LvSpider {
     }
 
 
-    public static void downPradaProductDetail(String url, Product product) throws Exception {
+    public static void downProductDetail(String url, Product product) throws Exception {
         httpGet.setURI(new URI(url));
         CloseableHttpResponse response = httpclient.execute(httpGet);
         // 获取响应状态码
@@ -318,7 +341,7 @@ public class LvSpider {
 
 
             HSSFCell cell1 = row.createCell(13);
-            cell1.setCellValue("PRADA 普拉达官网");
+            cell1.setCellValue("LouisVuitton 路易威登官网");
             Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.URL);
             hyperlink.setAddress(values.get(i).getDetailUrl());
             cell1.setHyperlink(hyperlink);
