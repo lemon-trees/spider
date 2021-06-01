@@ -2,6 +2,7 @@ package spider;
 
 import cn.hutool.core.collection.CollectionUtil;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.config.RequestConfig;
@@ -27,7 +28,9 @@ import java.io.*;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -48,7 +51,7 @@ public class DiorSpider {
 
     static String zero = "0000000";
 
-    static ExecutorService executorService = Executors.newFixedThreadPool(10);
+    static ExecutorService executorService = Executors.newFixedThreadPool(30);
 
 
     static {
@@ -63,7 +66,7 @@ public class DiorSpider {
     }
 
     public static void main(String[] args) throws Exception {
-        List<Product> products = new ArrayList<>();
+        Map<String, Product> products = new HashMap<>();
         get列表页Products(products);
         get女士小型皮具Products(products);
         get男士钱包Products(products);
@@ -76,16 +79,16 @@ public class DiorSpider {
             }
             Thread.sleep(200);
         }
-        if (CollectionUtil.isNotEmpty(products)) {
+        if (CollectionUtil.isNotEmpty(products.values())) {
             String[] title = {"物品名称", "型号", "规格", "官网价格", "图片1", "图片2", "图片3", "图片4", "图片5", "图片6", "颜色", "材质", "描述",
                     "商品链接"};
-            getHSSFWorkbook("Dior商品信息", title, products);
+            getHSSFWorkbook("Dior商品信息", title, new ArrayList<Product>(products.values()));
         }
 
     }
 
 
-    public static void get列表页Products(List<Product> products) {
+    public static void get列表页Products(Map<String, Product> products) {
         try {
             //通过文件加载解析
             Document doc = Jsoup.parse(new File("c://Users/tt/Desktop/爬虫/dior/列表页.html"), "UTF-8");
@@ -110,15 +113,14 @@ public class DiorSpider {
                         "¥", "").replace(",", "");
                 product.setPrice(price);
                 product.setDetailUrl(detailUrl);
-                downPradaProductDetail(detailUrl, product);
-                products.add(product);
+                downPradaProductDetail(detailUrl, product, products);
             }
         } catch (Exception e) {
             System.out.println("获取获取商品信息失败：" + e.getMessage());
         }
     }
 
-    public static void get女士小型皮具Products(List<Product> products) {
+    public static void get女士小型皮具Products(Map<String, Product> products) {
         try {
             //通过文件加载解析
             Document doc = Jsoup.parse(new File("c://Users/tt/Desktop/爬虫/dior/女士小型皮具.html"), "UTF-8");
@@ -143,15 +145,14 @@ public class DiorSpider {
                         "¥", "").replace(",", "");
                 product.setPrice(price);
                 product.setDetailUrl(detailUrl);
-                downPradaProductDetail(detailUrl, product);
-                products.add(product);
+                downPradaProductDetail(detailUrl, product, products);
             }
         } catch (Exception e) {
             System.out.println("获取获取商品信息失败：" + e.getMessage());
         }
     }
 
-    public static void get男士所有皮具列表Products(List<Product> products) {
+    public static void get男士所有皮具列表Products(Map<String, Product> products) {
         try {
             //通过文件加载解析
             Document doc = Jsoup.parse(new File("c://Users/tt/Desktop/爬虫/dior/男士所有皮具.html"), "UTF-8");
@@ -176,15 +177,14 @@ public class DiorSpider {
                         "¥", "").replace(",", "");
                 product.setPrice(price);
                 product.setDetailUrl(detailUrl);
-                downPradaProductDetail(detailUrl, product);
-                products.add(product);
+                downPradaProductDetail(detailUrl, product, products);
             }
         } catch (Exception e) {
             System.out.println("获取获取商品信息失败：" + e.getMessage());
         }
     }
 
-    public static void get男士钱包Products(List<Product> products) {
+    public static void get男士钱包Products(Map<String, Product> products) {
         try {
             //通过文件加载解析
             Document doc = Jsoup.parse(new File("c://Users/tt/Desktop/爬虫/dior/男士钱包.html"), "UTF-8");
@@ -209,8 +209,7 @@ public class DiorSpider {
                         "¥", "").replace(",", "");
                 product.setPrice(price);
                 product.setDetailUrl(detailUrl);
-                downPradaProductDetail(detailUrl, product);
-                products.add(product);
+                downPradaProductDetail(detailUrl, product, products);
             }
         } catch (Exception e) {
             System.out.println("获取获取商品信息失败：" + e.getMessage());
@@ -218,7 +217,7 @@ public class DiorSpider {
     }
 
 
-    public static void downPradaProductDetail(String url, Product product) throws Exception {
+    public static void downPradaProductDetail(String url, Product product, Map<String, Product> products) throws Exception {
         httpGet.setURI(new URI(url));
         CloseableHttpResponse response = httpclient.execute(httpGet);
         // 获取响应状态码
@@ -240,6 +239,10 @@ public class DiorSpider {
                         productInfo.select("div[class='product-titles']").select("h1").select("span[class='multiline-text product-titles-title multiline-text--is-china']").text();
                 product.setName(productName);
                 String productNo = productInfo.select("div[class='product-titles']").select("p").text().replace("编号:", "");
+                productNo = StringUtils.deleteWhitespace(productNo.replace("#新品",""));
+                if (products.containsKey(productNo)) {
+                    return;
+                }
                 product.setProductNo(productNo);
 
 
@@ -247,7 +250,7 @@ public class DiorSpider {
                         "='product" +
                         "-description-item']");
                 if (CollectionUtil.isNotEmpty(elements) && elements.size() > 1) {
-//描述
+                    //描述
                     String desc = productInfo.select("div[class='product-description']").select("div[class='product" +
                             "-description-item']").get(0).select("div[class='product-description-item__content']").text();
                     product.setDesc(desc);
@@ -259,25 +262,6 @@ public class DiorSpider {
                             "product-description-item__content--hidden']").text().replace("尺寸：", "");
                     product.setSpecs(specs);
 
-
-                    //颜色
-                    String materialColor = productInfo.select("div[class='product-titles']").select("h1").select("span" +
-                            "[class" +
-                            "='multiline-text product-titles-subtitle product-titles-subtitle--couture " +
-                            "multiline-text--is-china']").text();
-                    if (null != materialColor && materialColor.contains("色")) {
-                        try {
-                            String color = materialColor.substring(materialColor.indexOf("色") - 1,
-                                    materialColor.indexOf("色") + 1);
-                            product.setColor(color);
-                            String material = materialColor.substring(materialColor.indexOf("色") + 1);
-                            product.setMaterial(material);
-                        } catch (Exception e) {
-                            System.out.println("转换颜色、材质异常");
-                        }
-                    } else {
-                        product.setMaterial(materialColor);
-                    }
                 }
                 if (CollectionUtil.isNotEmpty(elements) && elements.size() == 1) {
 
@@ -286,6 +270,15 @@ public class DiorSpider {
                     product.setDesc(desc);
 
                 }
+
+                //颜色
+                String materialColor = productInfo.select("div[class='product-titles']").select("h1").select("span" +
+                        "[class" +
+                        "='multiline-text product-titles-subtitle product-titles-subtitle--couture " +
+                        "multiline-text--is-china']").text();
+
+                product.setMaterial(materialColor);
+                product.setColor(materialColor);
 
 
                 Elements picele = ulList.select("div[class='page-content product-page-couture']").select("div[id" +
@@ -310,6 +303,7 @@ public class DiorSpider {
                         images.add(imageName + ".PNG");
                     }
                     product.setImages(images);
+                    products.put(productNo, product);
                 }
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
@@ -514,6 +508,7 @@ public class DiorSpider {
         public void setDetailUrl(String detailUrl) {
             this.detailUrl = detailUrl;
         }
+
     }
 
     private static String getImageName() {

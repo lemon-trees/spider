@@ -1,11 +1,7 @@
 package spider;
 
 import cn.hutool.core.collection.CollectionUtil;
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
-import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.config.RequestConfig;
@@ -19,6 +15,10 @@ import org.apache.poi.hssf.usermodel.*;
 import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Hyperlink;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -28,6 +28,7 @@ import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -37,20 +38,20 @@ import java.util.concurrent.Executors;
  * <artifactId>jsoup</artifactId>
  * </dependency>
  */
-public class FendiSpider {
+public class YslSpider {
 
     static CloseableHttpClient httpclient;
     static HttpGet httpGet;
 
     static int imageNum = 1;
 
-    static String prefix = "J";
+    static String prefix = "I";
 
     static String zero = "0000000";
 
-    static String file_path = "c://Users/tt/Desktop/VALUE_011";
+    static String file_path = "c://Users/tt/Desktop/VALUE_010";
 
-    static String image_folder = "VALUE_YIA";
+    static String image_folder = "VALUE_XIA";
 
     static String image_tyep = ".PNG";
 
@@ -65,14 +66,7 @@ public class FendiSpider {
     }
 
     public static void main(String[] args) throws Exception {
-
         List<Product> products = new ArrayList<>();
-
-        downProduct("c://Users/tt/Desktop/爬虫/fendi/女士皮夹.json", products);
-        downProduct("c://Users/tt/Desktop/爬虫/fendi/女士手袋.json", products);
-        downProduct("c://Users/tt/Desktop/爬虫/fendi/男士皮夹.json", products);
-        downProduct("c://Users/tt/Desktop/爬虫/fendi/男士手袋.json", products);
-
         executorService.shutdown();
         while (true) {
             if (executorService.isTerminated()) {
@@ -84,135 +78,117 @@ public class FendiSpider {
         if (CollectionUtil.isNotEmpty(products)) {
             String[] title = {"物品名称", "型号", "规格", "官网价格", "图片1", "图片2", "图片3", "图片4", "图片5", "图片6", "颜色", "材质", "描述",
                     "商品链接"};
-            getHSSFWorkbook("商品信息", title, products);
+            getHSSFWorkbook("prada商品信息", title, products);
         }
     }
 
-    public static String readJsonFile(String fileName) {
-        String jsonStr = "";
+
+    public static void downProduct(String url, int page, Map<String, Product> products) throws Exception {
+        // 需要爬取商品信息的网站地址
+        url = url + page;
+        // 动态模拟请求数据
+        httpGet.setURI(new URI(url));
+        // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
+        httpGet.setHeader("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36");
+        CloseableHttpResponse response = httpclient.execute(httpGet);
+        // 获取响应状态码
+        int statusCode = response.getStatusLine().getStatusCode();
         try {
-            File jsonFile = new File(fileName);
-            FileReader fileReader = new FileReader(jsonFile);
-            Reader reader = new InputStreamReader(new FileInputStream(jsonFile), "utf-8");
-            int ch = 0;
-            StringBuffer sb = new StringBuffer();
-            while ((ch = reader.read()) != -1) {
-                sb.append((char) ch);
+            HttpEntity entity = response.getEntity();
+            if (statusCode == 200) {
+                String html = EntityUtils.toString(entity, Consts.UTF_8);
+                Document doc = Jsoup.parse(html);
+                Elements ulList = doc.select("div[class='gridCategory__wrapper js-plp-items-wrapper']");
+                Elements liList = ulList.select("product-qb-component");
+                for (Element item : liList) {
+                    Product product = new Product();
+                    String productNo = item.attr("data-part-number");
+                    product.setProductNo(productNo);
+                    String price = item.attr("data-price").replace("￥", "").replace(",", "");
+                    product.setPrice(price);
+                    String color = item.attr("data-color");
+                    product.setColor(color);
+                    System.out.println(productNo + ":" + price + ":" + color);
+                    String detailUrl = "https://www.prada.com" + item.select("div[class='gridCategory__item " +
+                            "js-product-qb enableFadeIn']").select(
+                            "div[class='productQB']").select("div[class='productQB__wrapperOut']").select("a").attr("href");
+                    product.setDetailUrl(detailUrl);
+                    products.put(productNo, product);
+                    downPradaProductDetail(detailUrl, product);
+                }
+                // 消耗掉实体
+                EntityUtils.consume(response.getEntity());
+            } else {
+                // 消耗掉实体
+                EntityUtils.consume(response.getEntity());
             }
-            fileReader.close();
-            reader.close();
-            jsonStr = sb.toString();
-            return jsonStr;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+        } finally {
+            response.close();
         }
-    }
-
-    public static void downProduct(String url, List<Product> products) throws Exception {
-        String test = readJsonFile(url);
-        JSONObject jobj = JSON.parseObject(test);
-        JSONArray jsonArray = jobj.getJSONObject("data").getJSONArray("items");
-        for (Object o : jsonArray) {
-            Product product = new Product();
-            JSONObject ob = (JSONObject) o;
-            product.setName(ob.getString("name") + ob.getString("shortDesc"));
-            product.setDesc(ob.getString("description"));
-            product.setPrice(ob.getString("price").replace("￥", "").replace(",", ""));
-            product.setProductNo(ob.getString("sku"));
-            String detailUrl = "https://www.fendi.cn/rest/default/V1/applet/product/" +
-                    ob.getString("sku") +
-                    "?version=7765a92ee7e1b31628f9917d9a6aacac";
-            product.setDetailUrl(ob.getString("url"));
-            JSONObject chiil = (JSONObject) ob.getJSONArray("childProducts").get(0);
-            product.setColor(chiil.getString("colorCn"));
-
-            downPradaProductDetail(detailUrl, product);
-
-            products.add(product);
-        }
-
-
     }
 
 
     public static void downPradaProductDetail(String url, Product product) throws Exception {
         httpGet.setURI(new URI(url));
         CloseableHttpResponse response = httpclient.execute(httpGet);
+        // 获取响应状态码
+        int statusCode = response.getStatusLine().getStatusCode();
         try {
-            // 获取响应状态码
-            int statusCode = response.getStatusLine().getStatusCode();
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
-                String json = EntityUtils.toString(entity, Consts.UTF_8);
-                JSONObject jobj = JSON.parseObject(json).getJSONObject("data");
-                JSONArray attr = jobj.getJSONArray("childProducts");
-
-                if (null != attr) {
-                    JSONObject info = ((JSONObject) attr.get(0)).getJSONObject("specificMorer");
-                    String material = info.getString("composition");
-                    product.setMaterial(material);
-
-
-                    String spec = "";
-                    String height = info.getString("height");
-                    if (StringUtils.isNotBlank(height)) {
-                        if (height.contains(",") && height.lastIndexOf(",") == height.length() - 1) {
-                            height = height.substring(0, height.lastIndexOf(","));
-                        }
-                        spec += height + "x";
-                    }
-                    String depth = info.getString("depth");
-                    if (StringUtils.isNotBlank(depth)) {
-                        if (depth.contains(",") && depth.lastIndexOf(",") == depth.length() - 1) {
-                            depth = depth.substring(0, depth.lastIndexOf(","));
-                        }
-                        spec += depth + "x";
-                    }
-                    String length = info.getString("length");
-                    if (StringUtils.isNotBlank(length)) {
-                        if (length.contains(",") && length.lastIndexOf(",") == length.length() - 1) {
-                            length = length.substring(0, length.lastIndexOf(","));
-                        }
-                        spec += length + "x";
-                    }
-                    if (StringUtils.isNotBlank(spec) && spec.contains("x")) {
-                        spec = spec.substring(0, spec.lastIndexOf("x")).replace("Cm","");
-                        product.setSpecs(spec + "cm");
-                    }
-
+                String html = EntityUtils.toString(entity, Consts.UTF_8);
+                Document doc = null;
+                doc = Jsoup.parse(html);
+                Elements ulList = doc.select("section[class='pDetails']");
+                Elements productName = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapper']").select("div[class" +
+                        "='pDetails__info js-info']").select("h1[class='pDetails__title']");
+                String name = productName.text();
+                product.setName(name);
+                if (null != name && name.contains("皮革")) {
+                    product.setMaterial("皮革");
                 }
-
-
-                JSONArray imagesArray = jobj.getJSONArray("images");
-                if (null != imagesArray) {
-                    List<String> images = new ArrayList<>();
-                    List<String> imagesUrl = new ArrayList<>();
-                    for (Object o : imagesArray) {
-                        JSONObject image = (JSONObject) o;
-                        imagesUrl.add(image.getString("url"));
-                        imagesUrl.add(image.getString("tiny_url"));
-                        if (imagesUrl.size() > 6) {
-                            break;
-                        }
-                    }
-                    for (String item : imagesUrl) {
-                        String imageName = getImageName();
-                        executorService.submit(() -> {
-                            downloadCompressedImage(item, imageName);
-                        });
-                        images.add(imageName + ".PNG");
-                    }
-                    product.setImages(images);
+                if (null != name && name.contains("尼龙")) {
+                    product.setMaterial("尼龙");
                 }
+                if (null != name && name.contains("尼龙") && name.contains("皮革")) {
+                    product.setMaterial("尼龙/皮革");
+                }
+                //获取商品描述
+                Element liList = ulList.select("section[class='pDetails__details tab js-details']")
+                        .select("div[class='tab__body']")
+                        .select("article[class='tab__item js-tab']")
+                        .select("div[class='tab__itemCont tabCont']")
+                        .select("div[class='tabCont__par']").get(0);
+                //描述
+                String desc = liList.select("p").text() + liList.select("li").text();
+                product.setDesc(desc);
+                //规格
+                String specs = liList.ownText();
+                if (null != specs) {
+                    specs = specs.replace("厘米", "").replace("高度", "×").replace("长度", "×").replace("宽度", "cm");
+                }
+                product.setSpecs(specs);
+                //获取图片
+                Elements picele = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapperImg" +
+                        "']").select("div[class" +
+                        "='pDetails__imgWrapper js-imgWrapper']").select("div[class='pDetails__sliderCont']").select("div[class='pDetails__slider js-slider js-scrollImage']").select("div[class='pDetails__slide js-imgProduct slick-slide']");
+                List<String> images = new ArrayList<>();
+                for (Element item : picele) {
+                    String imageUrl = item.select("a").select("picture-component").select("picture").select("img").attr(
+                            ":data-src").replace("'", "");
+                    String imageName = getImageName();
+                    executorService.submit(() -> {
+                        downloadCompressedImage(imageUrl, imageName);
+                    });
+                    images.add(imageName + ".PNG");
+                }
+                product.setImages(images);
+                // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             } else {
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             }
-        } catch (Exception e) {
-            System.out.println("获取商品详情失败" + e.getMessage());
-
         } finally {
             response.close();
         }
@@ -220,6 +196,13 @@ public class FendiSpider {
 
     private static String downloadImage(String fileUrl, String fileName) {
         try {
+//            URL url = new URL(fileUrl);
+////            String tempFileName = "c://Users/tt/Desktop/VALUE_010/VALUE_XIA/" + fileName + ".webp";
+//            String tempFileName = file_path + image_folder + fileName + ".webp";
+//            File temp = new File(tempFileName);
+//            FileUtils.copyURLToFile(url, temp);
+//            return fileName + ".webp";
+
             HttpGet httpGet = new HttpGet();
             RequestConfig requestConfig =
                     RequestConfig.custom().setConnectTimeout(20000).setConnectionRequestTimeout(20000).setSocketTimeout(20000).build();
@@ -229,10 +212,10 @@ public class FendiSpider {
             httpGet.setConfig(requestConfig);
             httpGet.setURI(new URI(fileUrl));
             CloseableHttpResponse resp = httpclient.execute(httpGet);// 调用服务器接口
-            String tempFileName = file_path + "/" + image_folder + "/" + fileName + ".jpg";
+            String tempFileName = file_path + "/" + image_folder + "/" + fileName + ".PNG";
             File temp = new File(tempFileName);
             FileUtils.copyInputStreamToFile(resp.getEntity().getContent(), temp);
-            return fileName + ".jpg";
+            return fileName + ".PNG";
         } catch (Exception e) {
             return null;
         }
@@ -246,7 +229,7 @@ public class FendiSpider {
      * @return
      */
     public static String downloadCompressedImage(String fileUrl, String fileName) {
-        URL url = null;
+        URL url;
         try {
             String tempFileName = file_path + "/" + image_folder + "/" + fileName + ".PNG";
             url = new URL(fileUrl);
@@ -260,8 +243,8 @@ public class FendiSpider {
             int width = preImage.getWidth();
             int height = preImage.getHeight();
 
-            int widthNew = width / 2;
-            int heightNew = height / 2;
+            int widthNew = width / 6;
+            int heightNew = height / 6;
 
             //5.构造压缩后的图片流 image 长宽各为原来的几分之几
             BufferedImage image = new BufferedImage(widthNew, heightNew, BufferedImage.TYPE_INT_ARGB);
@@ -335,13 +318,99 @@ public class FendiSpider {
 
 
             HSSFCell cell1 = row.createCell(13);
-            cell1.setCellValue("FENDI 芬迪官网");
+            cell1.setCellValue("PRADA 普拉达官网");
             Hyperlink hyperlink = createHelper.createHyperlink(HyperlinkType.URL);
             hyperlink.setAddress(values.get(i).getDetailUrl());
             cell1.setHyperlink(hyperlink);
 
         }
         wb.write(new FileOutputStream(file_path + "/商品信息.xls"));
+    }
+
+
+    static class Product {
+
+        private String name;
+        private String price;
+        private String color;
+        private String specs;
+        private String productNo;
+        private String material;
+        private String desc;
+        private String detailUrl;
+        private List<String> images;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getPrice() {
+            return price;
+        }
+
+        public void setPrice(String price) {
+            this.price = price;
+        }
+
+        public String getColor() {
+            return color;
+        }
+
+        public void setColor(String color) {
+            this.color = color;
+        }
+
+        public String getSpecs() {
+            return specs;
+        }
+
+        public void setSpecs(String specs) {
+            this.specs = specs;
+        }
+
+        public String getProductNo() {
+            return productNo;
+        }
+
+        public void setProductNo(String productNo) {
+            this.productNo = productNo;
+        }
+
+        public String getMaterial() {
+            return material;
+        }
+
+        public void setMaterial(String material) {
+            this.material = material;
+        }
+
+        public String getDesc() {
+            return desc;
+        }
+
+        public void setDesc(String desc) {
+            this.desc = desc;
+        }
+
+        public List<String> getImages() {
+            return images;
+        }
+
+        public void setImages(List<String> images) {
+            this.images = images;
+        }
+
+        public String getDetailUrl() {
+            return detailUrl;
+        }
+
+        public void setDetailUrl(String detailUrl) {
+            this.detailUrl = detailUrl;
+        }
     }
 
     private static String getImageName() {
