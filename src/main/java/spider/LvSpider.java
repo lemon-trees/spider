@@ -2,6 +2,7 @@ package spider;
 
 import cn.hutool.core.collection.CollectionUtil;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.config.RequestConfig;
@@ -76,7 +77,7 @@ public class LvSpider {
 
     public static void main(String[] args) throws Exception {
         Map<String, Product> products = new HashMap<>();
-        for (int i = 1; i < 2; i++) {
+        for (int i = 1; i < 3; i++) {
             downProduct(women_all_bag_url, i, products);
         }
 //        for (int i = 1; i < 20; i++) {
@@ -122,22 +123,24 @@ public class LvSpider {
                 }
                 for (int i = 0; i < liList.size(); i++) {
                     Element item = liList.get(i);
-                    Elements info  = item.select("div[class='lv-product-card -compact-large']").select("div" +
+                    Elements info = item.select("div[class='lv-product-card -compact-large']").select("div" +
                             "[class='lv-product-card__wrap']")
                             .select("div[class='lv-product-card__info-wrapper']").select("div[class='lv-product" +
                                     "-card__info']").select("span");
                     Product product = new Product();
-                    String productNo = item.attr("id");
+                    String productNo = info.attr("id").replace("product-", "");
+                    if (StringUtils.isEmpty(productNo)) {
+                        continue;
+                    }
                     product.setProductNo(productNo);
-                    String price = item.attr("data-price").replace("￥", "").replace(",", "");
-                    product.setPrice(price);
-                    String color = item.attr("data-color");
-                    product.setColor(color);
-                    System.out.println(productNo + ":" + price + ":" + color);
-                    String detailUrl = "";
+
+                    String name = info.select("a").text();
+                    product.setName(name);
+
+                    String detailUrl = "https://www.louisvuitton.cn" + info.select("a").attr("href");
                     product.setDetailUrl(detailUrl);
                     products.put(productNo, product);
-//                    downProductDetail(detailUrl, product);
+                    downProductDetail(detailUrl, product);
                 }
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
@@ -160,48 +163,57 @@ public class LvSpider {
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = null;
-                doc = Jsoup.parse(html);
-                Elements ulList = doc.select("section[class='pDetails']");
-                Elements productName = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapper']").select("div[class" +
-                        "='pDetails__info js-info']").select("h1[class='pDetails__title']");
-                String name = productName.text();
-                product.setName(name);
-                if (null != name && name.contains("皮革")) {
-                    product.setMaterial("皮革");
+                Document doc = Jsoup.parse(html);
+                Elements ulList = doc.select("div[class='lv-product__wrap']");
+
+
+                Elements detail = ulList.select("div[class='lv-product__details']");
+
+                String price = detail.select("div[class='lv-product__price-stock']").text().replace("¥", "").replace(",", "");
+                product.setPrice(price);
+
+
+                Elements colorAndMaterial = detail.select("div[class='lv-product-variations']")
+                        .select("button[class='lv-product-variation-selector list-label-l " +
+                                "lv-product-variations__selector']");
+                if (CollectionUtil.isNotEmpty(colorAndMaterial)) {
+                    String color = colorAndMaterial.get(0)
+                            .select("span[class='lv-product-variation-selector__value']").text();
+                    product.setColor(color);
+                    if (colorAndMaterial.size() > 1) {
+                        String material = colorAndMaterial.get(1)
+                                .select("span[class='lv-product-variation-selector__value']").text();
+                        product.setMaterial(material);
+                    }
                 }
-                if (null != name && name.contains("尼龙")) {
-                    product.setMaterial("尼龙");
-                }
-                if (null != name && name.contains("尼龙") && name.contains("皮革")) {
-                    product.setMaterial("尼龙/皮革");
-                }
-                //获取商品描述
-                Element liList = ulList.select("section[class='pDetails__details tab js-details']")
-                        .select("div[class='tab__body']")
-                        .select("article[class='tab__item js-tab']")
-                        .select("div[class='tab__itemCont tabCont']")
-                        .select("div[class='tabCont__par']").get(0);
-                //描述
-                String desc = liList.select("p").text() + liList.select("li").text();
+
+                String desc = detail.select("div[class='lv-product-description']").text();
                 product.setDesc(desc);
+
+
                 //规格
-                String specs = liList.ownText();
+                String specs = "";
                 if (null != specs) {
                     specs = specs.replace("厘米", "").replace("高度", "×").replace("长度", "×").replace("宽度", "cm");
                 }
                 product.setSpecs(specs);
+
+
                 //获取图片
-                Elements picele = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapperImg" +
-                        "']").select("div[class" +
-                        "='pDetails__imgWrapper js-imgWrapper']").select("div[class='pDetails__sliderCont']").select("div[class='pDetails__slider js-slider js-scrollImage']").select("div[class='pDetails__slide js-imgProduct slick-slide']");
+                Elements picele = ulList.select("div[class='lv-product__primary']").select("div[class='lv-product__primary-wrap']")
+                        .select("div[class='lv-product-visual']")
+                        .select("ul[class='lv-product-visual-module lv-list lv-product-visual__module-desktop']").select("li");
                 List<String> images = new ArrayList<>();
-                for (Element item : picele) {
-                    String imageUrl = item.select("a").select("picture-component").select("picture").select("img").attr(
-                            ":data-src").replace("'", "");
+
+                int size = Math.min(picele.size(), 6);
+
+                for (int i = 0; i < size; i++) {
+                    String imageUrl = picele.get(i).select("button[class='lv-product-visual-module__button']")
+                            .select("div[class='lv-smart-picture lv-responsive-picture lv-product-visual-module__image -fit-contain']")
+                            .select("noscript").select("img").attr("src");
                     String imageName = getImageName();
                     executorService.submit(() -> {
-                        downloadCompressedImage(imageUrl, imageName);
+                        downloadImage(imageUrl, imageName);
                     });
                     images.add(imageName + ".PNG");
                 }
@@ -266,8 +278,8 @@ public class LvSpider {
             int width = preImage.getWidth();
             int height = preImage.getHeight();
 
-            int widthNew = width / 6;
-            int heightNew = height / 6;
+            int widthNew = width;
+            int heightNew = height;
 
             //5.构造压缩后的图片流 image 长宽各为原来的几分之几
             BufferedImage image = new BufferedImage(widthNew, heightNew, BufferedImage.TYPE_INT_ARGB);
