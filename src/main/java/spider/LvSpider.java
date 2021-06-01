@@ -61,7 +61,7 @@ public class LvSpider {
             "?page=";
     static String men_all_bag_url = "https://www.louisvuitton.cn/zhs-cn/men/bags/all-bags/_/N-nstx58?page=";
 
-    static ExecutorService executorService = Executors.newFixedThreadPool(30);
+    static ExecutorService executorService = Executors.newFixedThreadPool(40);
 
 
     static {
@@ -77,12 +77,12 @@ public class LvSpider {
 
     public static void main(String[] args) throws Exception {
         Map<String, Product> products = new HashMap<>();
-        for (int i = 1; i < 3; i++) {
+        for (int i = 1; i < 40; i++) {
             downProduct(women_all_bag_url, i, products);
         }
-//        for (int i = 1; i < 20; i++) {
-//            downProduct(men_all_bag_url, i, products);
-//        }
+        for (int i = 1; i < 40; i++) {
+            downProduct(men_all_bag_url, i, products);
+        }
 
         executorService.shutdown();
         while (true) {
@@ -107,10 +107,10 @@ public class LvSpider {
         httpGet.setURI(new URI(url));
         // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
         httpGet.setHeader("user-agent", "Mozilla/5.0");
-        CloseableHttpResponse response = httpclient.execute(httpGet);
-        // 获取响应状态码
-        int statusCode = response.getStatusLine().getStatusCode();
         try {
+            CloseableHttpResponse response = httpclient.execute(httpGet);
+            // 获取响应状态码
+            int statusCode = response.getStatusLine().getStatusCode();
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
@@ -148,8 +148,11 @@ public class LvSpider {
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             }
-        } finally {
             response.close();
+        } catch (Exception e) {
+            System.out.println("请求列表失败：" + e.getMessage());
+        } finally {
+
         }
     }
 
@@ -181,23 +184,32 @@ public class LvSpider {
                             .select("span[class='lv-product-variation-selector__value']").text();
                     product.setColor(color);
                     if (colorAndMaterial.size() > 1) {
-                        String material = colorAndMaterial.get(1)
-                                .select("span[class='lv-product-variation-selector__value']").text();
-                        product.setMaterial(material);
+                        String typeName = colorAndMaterial.get(1)
+                                .select("span[class='lv-product-variation-selector__title -text-is-medium']").text();
+                        if (null != typeName && "材质".equals(typeName)) {
+                            String material = colorAndMaterial.get(1)
+                                    .select("span[class='lv-product-variation-selector__value']").text();
+                            product.setMaterial(material);
+                        }
                     }
                 }
 
-                String desc = detail.select("div[class='lv-product-description']").text();
-                product.setDesc(desc);
-
 
                 //规格
-                String specs = "";
+                String specs = detail.select("div[class='lv-product-features']")
+                        .select("div[class='lv-expandable-panel -minimal-height']")
+                        .select("div[class='lv-expandable-panel__content']").select("bdo").text();
                 if (null != specs) {
-                    specs = specs.replace("厘米", "").replace("高度", "×").replace("长度", "×").replace("宽度", "cm");
+                    specs = specs.replace("(长度 x 高 x 宽)", "").replace("厘米", "cm");
+                    product.setSpecs(specs);
                 }
-                product.setSpecs(specs);
 
+                String desc = detail.select("div[class='lv-product-description']").text();
+                String detailSesc = detail.select("div[class='lv-product-features']")
+                        .select("div[class='lv-expandable-panel -minimal-height']")
+                        .select("div[class='lv-expandable-panel__content']").text();
+                desc = desc + detailSesc;
+                product.setDesc(desc);
 
                 //获取图片
                 Elements picele = ulList.select("div[class='lv-product__primary']").select("div[class='lv-product__primary-wrap']")
