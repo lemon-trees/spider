@@ -180,13 +180,19 @@ public class LvSpider {
                         .select("button[class='lv-product-variation-selector list-label-l " +
                                 "lv-product-variations__selector']");
                 if (CollectionUtil.isNotEmpty(colorAndMaterial)) {
-                    String color = colorAndMaterial.get(0)
-                            .select("span[class='lv-product-variation-selector__value']").text();
-                    product.setColor(color);
+                    String typeName = colorAndMaterial.get(0)
+                            .select("span[class='lv-product-variation-selector__title -text-is-medium']").text();
+
+                    if ("颜色".equals(typeName)) {
+                        String color = colorAndMaterial.get(0)
+                                .select("span[class='lv-product-variation-selector__value']").text();
+                        product.setColor(color);
+                    }
+
                     if (colorAndMaterial.size() > 1) {
-                        String typeName = colorAndMaterial.get(1)
+                        typeName = colorAndMaterial.get(1)
                                 .select("span[class='lv-product-variation-selector__title -text-is-medium']").text();
-                        if (null != typeName && "材质".equals(typeName)) {
+                        if ("材质".equals(typeName)) {
                             String material = colorAndMaterial.get(1)
                                     .select("span[class='lv-product-variation-selector__value']").text();
                             product.setMaterial(material);
