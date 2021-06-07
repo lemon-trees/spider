@@ -1,6 +1,9 @@
 package spider;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
@@ -56,9 +59,10 @@ public class YslSpider {
 
     static String image_tyep = ".PNG";
 
-    static String all_bag_url = "https://www.ysl.cn/categories/shop-women/handbags/view-all.html";
+    static String women_all_bag_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-women%2Fhandbags%2Fview-all.html&page=";
 
-    static ExecutorService executorService = Executors.newFixedThreadPool(30);
+
+    static ExecutorService executorService = Executors.newFixedThreadPool(40);
 
 
     static {
@@ -74,10 +78,9 @@ public class YslSpider {
 
     public static void main(String[] args) throws Exception {
         Map<String, Product> products = new HashMap<>();
-        for (int i = 1; i < 2; i++) {
-            downProduct(all_bag_url, i, products);
+        for (int i = 1; i < 17; i++) {
+            downProduct(women_all_bag_url, i, products);
         }
-
         executorService.shutdown();
         while (true) {
             if (executorService.isTerminated()) {
@@ -89,7 +92,7 @@ public class YslSpider {
         if (CollectionUtil.isNotEmpty(products.values())) {
             String[] title = {"物品名称", "型号", "规格", "官网价格", "图片1", "图片2", "图片3", "图片4", "图片5", "图片6", "颜色", "材质", "描述",
                     "商品链接"};
-            getHSSFWorkbook("prada商品信息", title, new ArrayList<>(products.values()));
+            getHSSFWorkbook("商品信息", title, new ArrayList<>(products.values()));
         }
     }
 
@@ -101,47 +104,62 @@ public class YslSpider {
         httpGet.setURI(new URI(url));
         // 模拟浏览器浏览（user-agent的值可以通过浏览器浏览，查看发出请求的头文件获取）
         httpGet.setHeader("user-agent", "Mozilla/5.0");
-        CloseableHttpResponse response = httpclient.execute(httpGet);
-        // 获取响应状态码
-        int statusCode = response.getStatusLine().getStatusCode();
         try {
+            CloseableHttpResponse response = httpclient.execute(httpGet);
+            // 获取响应状态码
+            int statusCode = response.getStatusLine().getStatusCode();
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = Jsoup.parse(html);
-                Elements div = doc.select("div[class='lv-paginated-list lv-category__grid']");
-                Elements liList = div.select("div[class='lv-paginated-list lv-category__grid']").select("ul[class='lv" +
-                        "-list']").select("li");
-                if (CollectionUtil.isEmpty(liList)) {
-                    return;
+                JSONArray items = JSON.parseObject(html).getJSONObject("data").getJSONArray("items");
+
+                if (null != items) {
+                    for (Object item : items) {
+
+                        Product product = new Product();
+                        JSONObject productInfo = (JSONObject) item;
+                        String productNo = productInfo.getString("sku");
+                        if (products.containsKey(productNo)) {
+                            continue;
+                        }
+                        product.setProductNo(productNo);
+                        String name = productInfo.getString("name");
+                        product.setName(name);
+
+                        String composition = productInfo.getString("composition");
+                        product.setMaterial(composition);
+
+                        String price = productInfo.getString("price").replace("¥", "").replace(",", "");
+                        product.setPrice(price);
+
+
+                        JSONArray children = productInfo.getJSONArray("childProducts");
+                        if (null != children) {
+                            JSONObject child = (JSONObject) children.get(0);
+                            String colorCn = child.getString("colorCn");
+                            product.setColor(colorCn);
+                        }
+
+
+                        String detailUrl = "https://www.ysl.cn/products" + productInfo.getString("url");
+                        product.setDetailUrl(detailUrl);
+                        products.put(productNo, product);
+                        downProductDetail(detailUrl, product);
+                    }
                 }
-                for (int i = 0; i < liList.size(); i++) {
-                    Element item = liList.get(i);
-                    Elements info = item.select("div[class='lv-product-card -compact-large']").select("div" +
-                            "[class='lv-product-card__wrap']")
-                            .select("div[class='lv-product-card__info-wrapper']").select("div[class='lv-product" +
-                                    "-card__info']").select("span");
-                    Product product = new Product();
-                    String productNo = item.attr("id");
-                    product.setProductNo(productNo);
-                    String price = item.attr("data-price").replace("￥", "").replace(",", "");
-                    product.setPrice(price);
-                    String color = item.attr("data-color");
-                    product.setColor(color);
-                    System.out.println(productNo + ":" + price + ":" + color);
-                    String detailUrl = "";
-                    product.setDetailUrl(detailUrl);
-                    products.put(productNo, product);
-//                    downProductDetail(detailUrl, product);
-                }
+
+
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             } else {
                 // 消耗掉实体
                 EntityUtils.consume(response.getEntity());
             }
-        } finally {
             response.close();
+        } catch (Exception e) {
+            System.out.println("请求列表失败：" + e.getMessage());
+        } finally {
+
         }
     }
 
@@ -155,48 +173,49 @@ public class YslSpider {
             HttpEntity entity = response.getEntity();
             if (statusCode == 200) {
                 String html = EntityUtils.toString(entity, Consts.UTF_8);
-                Document doc = null;
-                doc = Jsoup.parse(html);
-                Elements ulList = doc.select("section[class='pDetails']");
-                Elements productName = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapper']").select("div[class" +
-                        "='pDetails__info js-info']").select("h1[class='pDetails__title']");
-                String name = productName.text();
-                product.setName(name);
-                if (null != name && name.contains("皮革")) {
-                    product.setMaterial("皮革");
-                }
-                if (null != name && name.contains("尼龙")) {
-                    product.setMaterial("尼龙");
-                }
-                if (null != name && name.contains("尼龙") && name.contains("皮革")) {
-                    product.setMaterial("尼龙/皮革");
-                }
-                //获取商品描述
-                Element liList = ulList.select("section[class='pDetails__details tab js-details']")
-                        .select("div[class='tab__body']")
-                        .select("article[class='tab__item js-tab']")
-                        .select("div[class='tab__itemCont tabCont']")
-                        .select("div[class='tabCont__par']").get(0);
-                //描述
-                String desc = liList.select("p").text() + liList.select("li").text();
+                Document doc = Jsoup.parse(html);
+                Elements ulList = doc.select("section[class='page-products-id page-content page-has-padding']");
+
+
+                Elements detail = ulList.select("div[class='page-products-id__info']").select("div[class='page-products-id__info-content']");
+                String desc = detail.select("div[class='page-products-id__describe']").text();
                 product.setDesc(desc);
-                //规格
-                String specs = liList.ownText();
-                if (null != specs) {
-                    specs = specs.replace("厘米", "").replace("高度", "×").replace("长度", "×").replace("宽度", "cm");
+
+
+                Elements elements = detail.select("div[class='page-products-id__describe']")
+                        .select("div[class='component-app-collapse page-products-id__collapse']")
+                        .select("div[class='component-app-collapse__content is-top']")
+                        .select("div[class='page-products-id__text page-product-detail__more-description']")
+                        .select("div[class='page-product-detail__short-description page-products-id__text__inner']").select("ul").select("li");
+
+                if(CollectionUtil.isNotEmpty(elements)){
+
+                    for (Element element : elements) {
+                        String specs= element.text();
+                        if(specs.contains("尺寸")){
+
+                            product.setSpecs(specs.replace("尺寸","").replace(":","").replace("：",""));
+
+                        }
+                    }
+
                 }
-                product.setSpecs(specs);
+
+
                 //获取图片
-                Elements picele = doc.select("div[class='pDetails__sticky']").select("div[class='pDetails__wrapperImg" +
-                        "']").select("div[class" +
-                        "='pDetails__imgWrapper js-imgWrapper']").select("div[class='pDetails__sliderCont']").select("div[class='pDetails__slider js-slider js-scrollImage']").select("div[class='pDetails__slide js-imgProduct slick-slide']");
+                Elements picele = ulList.select("div[class='page-products-id__image']").select("section[class='component-products-pictures']")
+                        .select("ul[class='component-products-pictures__desktop layout-desktop-large-desktop-only']").select("li");
                 List<String> images = new ArrayList<>();
-                for (Element item : picele) {
-                    String imageUrl = item.select("a").select("picture-component").select("picture").select("img").attr(
-                            ":data-src").replace("'", "");
+
+                int size = Math.min(picele.size(), 6);
+
+                for (int i = 0; i < size; i++) {
+                    String imageUrl = picele.get(i).select("div[class='component-product-image']")
+                            .select("div[class='component-product-image__wrapper']")
+                            .select("img").attr("data-src");
                     String imageName = getImageName();
                     executorService.submit(() -> {
-                        downloadCompressedImage(imageUrl, imageName);
+                        downloadImage(imageUrl, imageName);
                     });
                     images.add(imageName + ".PNG");
                 }
@@ -261,8 +280,8 @@ public class YslSpider {
             int width = preImage.getWidth();
             int height = preImage.getHeight();
 
-            int widthNew = width / 6;
-            int heightNew = height / 6;
+            int widthNew = width;
+            int heightNew = height;
 
             //5.构造压缩后的图片流 image 长宽各为原来的几分之几
             BufferedImage image = new BufferedImage(widthNew, heightNew, BufferedImage.TYPE_INT_ARGB);
