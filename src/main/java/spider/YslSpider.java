@@ -61,6 +61,19 @@ public class YslSpider {
 
     static String women_all_bag_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-women%2Fhandbags%2Fview-all.html&page=";
 
+    static String women_mini_bag_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-women" +
+            "%2Fmini-bags%2Fview-all.html&page=";
+
+    static String women_slg_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-women%2Fslg" +
+            "%2Fview-all.html&page=";
+
+
+    static String men_slg_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-men%2Fslg" +
+            "%2Fview-all.html&page=";
+
+    static String men_fluggages_url = "https://www.ysl.cn/rest/default/V1/catalog/productListByUrl?url=shop-men" +
+            "%2Fluggages" +
+            "%2Fview-all.html&page=";
 
     static ExecutorService executorService = Executors.newFixedThreadPool(40);
 
@@ -80,6 +93,18 @@ public class YslSpider {
         Map<String, Product> products = new HashMap<>();
         for (int i = 1; i < 17; i++) {
             downProduct(women_all_bag_url, i, products);
+        }
+        for (int i = 1; i < 5; i++) {
+            downProduct(women_mini_bag_url, i, products);
+        }
+        for (int i = 1; i < 7; i++) {
+            downProduct(women_slg_url, i, products);
+        }
+        for (int i = 1; i < 4; i++) {
+            downProduct(men_slg_url, i, products);
+        }
+        for (int i = 1; i < 4; i++) {
+            downProduct(men_fluggages_url, i, products);
         }
         executorService.shutdown();
         while (true) {
@@ -188,13 +213,13 @@ public class YslSpider {
                         .select("div[class='page-products-id__text page-product-detail__more-description']")
                         .select("div[class='page-product-detail__short-description page-products-id__text__inner']").select("ul").select("li");
 
-                if(CollectionUtil.isNotEmpty(elements)){
+                if (CollectionUtil.isNotEmpty(elements)) {
 
                     for (Element element : elements) {
-                        String specs= element.text();
-                        if(specs.contains("尺寸")){
+                        String specs = element.text();
+                        if (specs.contains("尺寸")) {
 
-                            product.setSpecs(specs.replace("尺寸","").replace(":","").replace("：",""));
+                            product.setSpecs(specs.replace("尺寸", "").replace(":", "").replace("：", ""));
 
                         }
                     }
